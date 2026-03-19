@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+
+  # ── Service Registry ─────────────────────────────────────────────────────────
+  consul:
+    image: hashicorp/consul:1.17
+    ports:
+      - "8500:8500"   # Consul UI + HTTP API accessible from host
+    command: >
+      consul agent
+        -dev
+        -client=0.0.0.0
+        -ui
+        -log-level=warn
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Service Instance 1 ───────────────────────────────────────────────────────
+  service-1:
+    build:
+      context: ./service
+    environment:
+      - INSTANCE_NAME=service-1
+      - SERVICE_PORT=5001
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+    ports:
+      - "5001:5001"   # expose to host for direct curl testing
+    depends_on:
+      consul:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Service Instance 2 ───────────────────────────────────────────────────────
+  service-2:
+    build:
+      context: ./service
+    environment:
+      - INSTANCE_NAME=service-2
+      - SERVICE_PORT=5002
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+    ports:
+      - "5002:5002"
+    depends_on:
+      consul:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Discovery Client ─────────────────────────────────────────────────────────
+  client:
+    build:
+      context: ./client
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - POLL_INTERVAL=2
+    depends_on:
+      service-1:
+        condition: service_healthy
+      service-2:
+        condition: service_healthy
+    restart: on-failure   # retry if it starts before services finish registering
+
+networks:
+  default:
+    name: service-discovery-net
