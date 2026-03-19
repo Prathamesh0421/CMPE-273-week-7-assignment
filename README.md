@@ -2,6 +2,8 @@
 
 CMPE-273 Week 7 — Service discovery using Consul, Go, and Docker Compose.
 
+Demo Video - https://drive.google.com/file/d/14yuzUBBG7anziVkBMy30SoZjm6ly3H5B/view?usp=sharing
+
 ## Architecture
 
 ### Component Diagram
