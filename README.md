@@ -4,6 +4,70 @@ CMPE-273 Week 7 — Service discovery using Consul, Go, and Docker Compose.
 
 ## Architecture
 
+### Component Diagram
+
+```mermaid
+graph TB
+    subgraph Host["Host Machine"]
+        UI["Browser\nhttp://localhost:8500"]
+        H1["curl localhost:5001"]
+        H2["curl localhost:5002"]
+    end
+
+    subgraph DockerNet["Docker Network — service-discovery-net"]
+        subgraph ConsulNode["Consul Registry  :8500"]
+            CR["HashiCorp Consul\n(dev mode)\n\nService Registry\nHealth Check Engine\nREST API"]
+        end
+
+        subgraph Svc1["service-1  :5001"]
+            S1["Go HTTP Server\n\nGET  /hello\nGET  /health"]
+        end
+
+        subgraph Svc2["service-2  :5002"]
+            S2["Go HTTP Server\n\nGET  /hello\nGET  /health"]
+        end
+
+        subgraph ClientNode["client"]
+            CL["Go Discovery Client\n\nDiscover → Pick → Call\nevery 2s"]
+        end
+    end
+
+    %% Registration (startup)
+    S1 -->|"PUT /v1/agent/service/register\nID: service-1, Port: 5001"| CR
+    S2 -->|"PUT /v1/agent/service/register\nID: service-2, Port: 5002"| CR
+
+    %% Health checks (Consul → Services)
+    CR -.->|"GET /health every 10s"| S1
+    CR -.->|"GET /health every 10s"| S2
+
+    %% Discovery + call (client loop)
+    CL -->|"GET /v1/health/service/hello-service?passing"| CR
+    CR -->|"[ service-1:5001, service-2:5002 ]"| CL
+    CL -->|"GET /hello  (random pick)"| S1
+    CL -->|"GET /hello  (random pick)"| S2
+
+    %% Graceful deregistration
+    S1 -.->|"PUT /v1/agent/service/deregister/service-1\n(on SIGTERM)"| CR
+    S2 -.->|"PUT /v1/agent/service/deregister/service-2\n(on SIGTERM)"| CR
+
+    %% Host access
+    UI -->|":8500"| CR
+    H1 -->|":5001"| S1
+    H2 -->|":5002"| S2
+
+    classDef consul fill:#c0392b,color:#fff,stroke:#922b21
+    classDef svc fill:#2980b9,color:#fff,stroke:#1a5276
+    classDef client fill:#27ae60,color:#fff,stroke:#1e8449
+    classDef host fill:#f5f5f5,color:#333,stroke:#aaa,stroke-dasharray:5
+
+    class CR consul
+    class S1,S2 svc
+    class CL client
+    class UI,H1,H2 host
+```
+
+### Sequence Diagram
+
 ```mermaid
 sequenceDiagram
     autonumber
